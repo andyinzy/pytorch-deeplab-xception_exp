@@ -293,7 +293,10 @@ class ASPP_module(nn.Module):
                 m.weight.data.fill_(1)
                 m.bias.data.zero_()
 
-
+    """
+    这段代码定义了一个DeepLabv3_plus模型，用于图像分割任务。模型的主要结构包括Xception网络作为主干网络，ASPP模块用于多尺度特征融合，以及一些卷积和池化操作。
+    在__init__函数中，首先打印了一些模型的信息，然后初始化了Xception网络和ASPP模块。根据输入的输出步长os，选择不同的空洞卷积率。然后定义了一些卷积和批归一化层。
+    """
 class DeepLabv3_plus(nn.Module):
     def __init__(self, nInputChannels=3, n_classes=21, os=16, pretrained=False, freeze_bn=False, _print=True):
         if _print:
@@ -343,7 +346,12 @@ class DeepLabv3_plus(nn.Module):
                                        nn.Conv2d(256, n_classes, kernel_size=1, stride=1))
         if freeze_bn:
             self._freeze_bn()
-
+    """
+    在forward函数中，首先通过Xception网络提取特征，然后将特征分别经过ASPP模块进行多尺度特征融合。
+    接着，通过全局平均池化和插值操作得到一个尺度与ASPP模块输出相同的特征。
+    然后将所有特征拼接在一起，并经过一系列卷积和批归一化操作。
+    最后，通过插值操作将特征的尺度调整为输入图像的尺度，并输出分割结果。
+    """
     def forward(self, input):
         x, low_level_features = self.xception_features(input)
         x1 = self.aspp1(x)
@@ -371,7 +379,10 @@ class DeepLabv3_plus(nn.Module):
         x = F.interpolate(x, size=input.size()[2:], mode='bilinear', align_corners=True)
 
         return x
-
+    """
+    _freeze_bn函数用于冻结批归一化层的参数，使其在推理阶段保持固定。
+    _init_weight函数用于初始化卷积层的权重和批归一化层的参数。
+    """
     def _freeze_bn(self):
         for m in self.modules():
             if isinstance(m, BatchNorm2d):

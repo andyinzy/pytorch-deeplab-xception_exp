@@ -5,19 +5,20 @@ import torch.nn.functional as F
 import torch.utils.model_zoo as model_zoo
 from modeling.sync_batchnorm.batchnorm import SynchronizedBatchNorm2d
 
+# 用于对输入进行固定填充，返回填充后的输入。
 def fixed_padding(inputs, kernel_size, dilation):
-    kernel_size_effective = kernel_size + (kernel_size - 1) * (dilation - 1)
-    pad_total = kernel_size_effective - 1
-    pad_beg = pad_total // 2
+    kernel_size_effective = kernel_size + (kernel_size - 1) * (dilation - 1) # 计算有效的卷积核大小，即考虑了膨胀率的卷积核大小。
+    pad_total = kernel_size_effective - 1 # 计算总的填充大小，即卷积核大小减去1。
+    pad_beg = pad_total // 2    # 计算填充的开始位置和结束位置，即总的填充大小除以2。
     pad_end = pad_total - pad_beg
-    padded_inputs = F.pad(inputs, (pad_beg, pad_end, pad_beg, pad_end))
+    padded_inputs = F.pad(inputs, (pad_beg, pad_end, pad_beg, pad_end)) # 使用F.pad函数对输入进行填充，填充的大小为(pad_beg, pad_end, pad_beg, pad_end)。
     return padded_inputs
 
 
 class SeparableConv2d(nn.Module):
     def __init__(self, inplanes, planes, kernel_size=3, stride=1, dilation=1, bias=False, BatchNorm=None):
         super(SeparableConv2d, self).__init__()
-
+        # 在初始化函数中，定义了三个卷积层：conv1是一个普通的卷积层，bn是一个批归一化层，pointwise是一个1x1的卷积层。
         self.conv1 = nn.Conv2d(inplanes, inplanes, kernel_size, stride, 0, dilation,
                                groups=inplanes, bias=bias)
         self.bn = BatchNorm(inplanes)
@@ -35,7 +36,7 @@ class Block(nn.Module):
     def __init__(self, inplanes, planes, reps, stride=1, dilation=1, BatchNorm=None,
                  start_with_relu=True, grow_first=True, is_last=False):
         super(Block, self).__init__()
-
+        # 如果planes不等于inplanes或者stride不等于1，则需要进行跳跃连接，使用一个1x1的卷积层和批归一化层来调整维度。
         if planes != inplanes or stride != 1:
             self.skip = nn.Conv2d(inplanes, planes, 1, stride=stride, bias=False)
             self.skipbn = BatchNorm(planes)
@@ -43,15 +44,18 @@ class Block(nn.Module):
             self.skip = None
 
         self.relu = nn.ReLU(inplace=True)
-        rep = []
+        rep = []    # 空的列表rep，用于存储残差块的层。
 
         filters = inplanes
+        # 根据grow_first参数的值，决定是先增加通道数还是先减少通道数
+        # 为True，则先增加通道数，即先经过一个ReLU激活函数、一个可分离卷积层和一个批归一化层，然后将filters更新为planes
+        # 为False，则先减少通道数，即先经过一个ReLU激活函数、一个可分离卷积层和一个批归一化层，然后将filters更新为inplanes。
         if grow_first:
             rep.append(self.relu)
             rep.append(SeparableConv2d(inplanes, planes, 3, 1, dilation, BatchNorm=BatchNorm))
             rep.append(BatchNorm(planes))
             filters = planes
-
+        # 根据reps参数的值，循环添加reps - 1个残差块。每个残差块都包括一个ReLU激活函数、一个可分离卷积层和一个批归一化层。
         for i in range(reps - 1):
             rep.append(self.relu)
             rep.append(SeparableConv2d(filters, filters, 3, 1, dilation, BatchNorm=BatchNorm))
@@ -61,7 +65,7 @@ class Block(nn.Module):
             rep.append(self.relu)
             rep.append(SeparableConv2d(inplanes, planes, 3, 1, dilation, BatchNorm=BatchNorm))
             rep.append(BatchNorm(planes))
-
+        # 如果stride等于1且is_last为True，则添加一个ReLU激活函数、一个可分离卷积层和一个批归一化层，用于最后的卷积操作
         if stride != 1:
             rep.append(self.relu)
             rep.append(SeparableConv2d(planes, planes, 3, 2, BatchNorm=BatchNorm))
@@ -71,10 +75,10 @@ class Block(nn.Module):
             rep.append(self.relu)
             rep.append(SeparableConv2d(planes, planes, 3, 1, BatchNorm=BatchNorm))
             rep.append(BatchNorm(planes))
-
+        # 如果start_with_relu为False，则将列表rep的第一个元素移除。
         if not start_with_relu:
             rep = rep[1:]
-
+        # 使用nn.Sequential将列表rep中的层组合成一个序列。
         self.rep = nn.Sequential(*rep)
 
     def forward(self, inp):

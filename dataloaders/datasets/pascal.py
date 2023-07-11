@@ -116,8 +116,8 @@ if __name__ == '__main__':
     args.crop_size = 513
 
     voc_train = VOCSegmentation(args, split='train')
-
-    dataloader = DataLoader(voc_train, batch_size=5, shuffle=True, num_workers=0)
+    # default dataloader = DataLoader(voc_train, batch_size=5, shuffle=True, num_workers=0)
+    dataloader = DataLoader(voc_train, batch_size=4, shuffle=True, num_workers=4)
 
     for ii, sample in enumerate(dataloader):
         for jj in range(sample["image"].size()[0]):
